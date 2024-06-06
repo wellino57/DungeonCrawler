@@ -16,10 +16,15 @@ import com.badlogic.gdx.maps.tiled.TiledMapRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
 import com.badlogic.gdx.maps.tiled.renderers.OrthogonalTiledMapRenderer;
 import com.badlogic.gdx.maps.tiled.tiles.StaticTiledMapTile;
+import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.scenes.scene2d.ui.Cell;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.math.Rectangle;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Vector;
 
 public class DungeonCrawler extends ApplicationAdapter {
 	SpriteBatch batch;
@@ -39,6 +44,8 @@ public class DungeonCrawler extends ApplicationAdapter {
 	TiledMapRenderer mapRenderer;
 
 	private OrthographicCamera camera;
+
+	private float previousX, previousY;
 	//private SpriteBatch batch;
 
 	@Override
@@ -67,7 +74,7 @@ public class DungeonCrawler extends ApplicationAdapter {
 					TiledMapTileLayer.Cell cell = new TiledMapTileLayer.Cell();
 
 					cell.setTile(new StaticTiledMapTile(region));
-					layer.setCell(x*4, y*4, cell);
+					layer.setCell(x*4, -y*4+60, cell);
 				}
 			}
 		}
@@ -76,8 +83,8 @@ public class DungeonCrawler extends ApplicationAdapter {
 		player = new Rectangle();
 		player.x = 960 / 2;
 		player.y = 540 / 2;
-		player.width = 64;
-		player.height = 64;
+		player.width = 60;
+		player.height = 60;
 
 		object = new Rectangle();
 		object.x = 100;
@@ -110,30 +117,44 @@ public class DungeonCrawler extends ApplicationAdapter {
 
 		batch.end();
 
-		if(!checkCollision()){
-			if(Gdx.input.isKeyPressed(Input.Keys.W)&& Gdx.input.isKeyPressed(Input.Keys.D)){
-				player.x -= 60 * Gdx.graphics.getDeltaTime();
-				player.y -= 60 * Gdx.graphics.getDeltaTime();
-			}
-			if(Gdx.input.isKeyPressed(Input.Keys.W)&& Gdx.input.isKeyPressed(Input.Keys.A)){
-				player.x += 60 * Gdx.graphics.getDeltaTime();
-				player.y -= 60 * Gdx.graphics.getDeltaTime();
-			}
-			if(Gdx.input.isKeyPressed(Input.Keys.S)&& Gdx.input.isKeyPressed(Input.Keys.D)){
-				player.x -= 60 * Gdx.graphics.getDeltaTime();
-				player.y += 60 * Gdx.graphics.getDeltaTime();
-			}
-			if(Gdx.input.isKeyPressed(Input.Keys.S)&& Gdx.input.isKeyPressed(Input.Keys.A)){
-				player.x += 60 * Gdx.graphics.getDeltaTime();
-				player.y += 60 * Gdx.graphics.getDeltaTime();
-			}
-			if(Gdx.input.isKeyPressed(Input.Keys.W)) player.y += 200 * Gdx.graphics.getDeltaTime();
-			if(Gdx.input.isKeyPressed(Input.Keys.S)) player.y -= 200 * Gdx.graphics.getDeltaTime();
-			if(Gdx.input.isKeyPressed(Input.Keys.D)) player.x += 200 * Gdx.graphics.getDeltaTime();
-			if(Gdx.input.isKeyPressed(Input.Keys.A)) player.x -= 200 * Gdx.graphics.getDeltaTime();
-		}else{
-			System.out.println("colliding");
+		previousX = player.x;
+		previousY = player.y;
+
+		if(Gdx.input.isKeyPressed(Input.Keys.W)&& Gdx.input.isKeyPressed(Input.Keys.D)){
+			player.x -= 60 * Gdx.graphics.getDeltaTime();
+			player.y -= 60 * Gdx.graphics.getDeltaTime();
 		}
+		if(Gdx.input.isKeyPressed(Input.Keys.W)&& Gdx.input.isKeyPressed(Input.Keys.A)){
+			player.x += 60 * Gdx.graphics.getDeltaTime();
+			player.y -= 60 * Gdx.graphics.getDeltaTime();
+		}
+		if(Gdx.input.isKeyPressed(Input.Keys.S)&& Gdx.input.isKeyPressed(Input.Keys.D)){
+			player.x -= 60 * Gdx.graphics.getDeltaTime();
+			player.y += 60 * Gdx.graphics.getDeltaTime();
+		}
+		if(Gdx.input.isKeyPressed(Input.Keys.S)&& Gdx.input.isKeyPressed(Input.Keys.A)){
+			player.x += 60 * Gdx.graphics.getDeltaTime();
+			player.y += 60 * Gdx.graphics.getDeltaTime();
+		}
+		if(Gdx.input.isKeyPressed(Input.Keys.W)) player.y += 200 * Gdx.graphics.getDeltaTime();
+		if(Gdx.input.isKeyPressed(Input.Keys.S)) player.y -= 200 * Gdx.graphics.getDeltaTime();
+		if(Gdx.input.isKeyPressed(Input.Keys.D)) player.x += 200 * Gdx.graphics.getDeltaTime();
+		if(Gdx.input.isKeyPressed(Input.Keys.A)) player.x -= 200 * Gdx.graphics.getDeltaTime();
+
+		if(Gdx.input.isTouched()) {
+			Vector3 touchPos = new Vector3();
+			touchPos.set(Gdx.input.getX(), Gdx.input.getY(), 0);
+			camera.unproject(touchPos);
+			System.out.println(touchPos.x/64+" "+touchPos.y/64);
+			//player.x = touchPos.x - 64 / 2;
+			//player.y = touchPos.y - 64 / 2;
+			tracePath(findPath(touchPos.x, touchPos.y));
+			System.out.println(getNode(touchPos.x, touchPos.y).val);
+		}
+
+		checkCollision();
+
+		//System.out.println(player.x+" "+player.y);
 
 	}
 
@@ -144,27 +165,113 @@ public class DungeonCrawler extends ApplicationAdapter {
 		playerSprite.dispose();
 	}
 
-	public boolean checkCollision () {
-		if (player.overlaps(object)) return true;
-		else return false;
-	}
-}
-/*
-private boolean isCellBlocked(float x, float y) {
-	Cell cell = null;
-	boolean blocked = false;
+	private void checkCollision() {
+		boolean collisionDetected = false;
 
-	try {
-		cell = collisionLayer.getCell((int) (x / collisionLayer.getTileWidth()), (int) (y / collisionLayer.getTileHeight()));
-	} catch (Exception e) {
-		e.printStackTrace();
-	}
+		if (Intersector.overlaps(player, object)) {
+			collisionDetected = true;
+		}
 
-	if (cell != null && cell.getTile() != null) {
-		if (cell.getTile().getProperties().containsKey("blocked")) {
-			blocked = true;
+		for (int y = 0; y < layer.getHeight(); y++) {
+			for (int x = 0; x < layer.getWidth(); x++) {
+				TiledMapTileLayer.Cell cell = layer.getCell(x, y);
+				if (cell != null) {
+					Rectangle tileRect = new Rectangle(x * layer.getTileWidth(), y * layer.getTileHeight(), layer.getTileWidth()*4, layer.getTileHeight()*4);
+					if (Intersector.overlaps(player, tileRect)) {
+						collisionDetected = true;
+						break;
+					}
+				}
+			}
+			if (collisionDetected) break;
+		}
+
+		if (collisionDetected) {
+			handleCollision();
 		}
 	}
-	return blocked;
+
+	private void handleCollision() {
+		player.x = previousX;
+		player.y = previousY;
+	}
+
+	public ArrayList<Node> findPath (double mx, double my){
+		ArrayList<Node> open = new ArrayList<>();
+		ArrayList<Node> closed = new ArrayList<>();
+
+		Node startTile = getNode(player.x, player.y);
+		startTile.g = 0;
+		startTile.h = pathLenght(startTile, getNode(mx, my));
+		startTile.f = startTile.g + startTile.h;
+		open.add(startTile);
+
+		getNode(mx, my).goal = true;
+
+		while(!open.isEmpty()){
+			Node current = open.get(0);
+			for(Node n : open){
+				if (n.f < current.f) current = n;
+			}
+
+			open.remove(current);
+			closed.add(current);
+
+			if (current.goal) return getPath(current);
+
+			int[][] dirs = new int[][]{{-1,0},{1,0},{0,-1},{0,1}};
+			ArrayList<Node> neighbours= new ArrayList<>();
+			for(int[] dir : dirs){
+				Node neighbour = getNode(current.x+dir[0], current.y+dir[1]);
+				if (!closed.contains(neighbour) && neighbour.val == 0){
+					neighbours.add(neighbour);
+
+					for(Node neigh : neighbours){
+						int possibleG = current.g + pathLenght(current, neigh);
+						if (possibleG < neigh.g){
+							neigh.precursor = current;
+							neigh.g = possibleG;
+							neigh.h = pathLenght(neigh, getNode(mx,my));
+							neigh.f = neigh.g + neigh.h;
+
+							if (!open.contains(neigh)){
+								open.add(neigh);
+							}
+						}
+					}
+				}
+			}
+		}
+		return null;
+	}
+
+	public int pathLenght(Node startNode, Node endNode){
+		return Math.abs(startNode.x - endNode.x) + Math.abs(startNode.y - endNode.y);
+	}
+
+	public Node getNode(double x, double y){
+		int mapX = (int)Math.floor(x/64);
+		int mapY = (int)Math.floor(y/64);
+		return Map.nodeMap[mapX][mapY];
+	}
+
+	public ArrayList<Node> getPath(Node n){
+		ArrayList<Node> path = new ArrayList<>();
+		while(n.precursor != null){
+			path.add(n);
+			n = n.precursor;
+		}
+		Collections.reverse(path);
+		return path;
+	}
+
+	public void tracePath(ArrayList<Node> path){
+		if (path != null){
+			for(Node n : path){
+				player.x = n.x;
+				player.y = n.y;
+			}
+		}
+	}
+
 }
-*/
