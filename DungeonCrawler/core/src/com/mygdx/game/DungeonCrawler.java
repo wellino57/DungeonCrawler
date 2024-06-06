@@ -14,6 +14,7 @@ import com.badlogic.gdx.maps.MapLayers;
 import com.badlogic.gdx.maps.tiled.TiledMap;
 import com.badlogic.gdx.maps.tiled.TiledMapRenderer;
 import com.badlogic.gdx.maps.tiled.TiledMapTileLayer;
+import com.badlogic.gdx.maps.tiled.renderers.OrthogonalTiledMapRenderer;
 import com.badlogic.gdx.maps.tiled.tiles.StaticTiledMapTile;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.scenes.scene2d.ui.Cell;
@@ -34,9 +35,10 @@ public class DungeonCrawler extends ApplicationAdapter {
 	TiledMap tileMap;
 	MapLayers layers;
 	TiledMapTileLayer layer;
+	TiledMapTileLayer collisionLaayer;
+	TiledMapRenderer mapRenderer;
 
 	private OrthographicCamera camera;
-	TiledMapRenderer mapRenderer;
 	//private SpriteBatch batch;
 
 	@Override
@@ -56,6 +58,19 @@ public class DungeonCrawler extends ApplicationAdapter {
 		tileMap = new TiledMap();
 		layers = tileMap.getLayers();
 		layer = new TiledMapTileLayer(256, 256, 16, 16);
+		collisionLayer = new TiledMapTileLayer(256, 256, 16, 16);
+		mapRenderer = new OrthogonalTiledMapRenderer(tileMap);
+
+		for (int y=0;y<16;y++){
+			for (int x=0;x<16;x++){
+				if(level.map[y][x]==1){
+					TiledMapTileLayer.Cell cell = new TiledMapTileLayer.Cell();
+
+					cell.setTile(new StaticTiledMapTile(region));
+					layer.setCell(x*4, y*4, cell);
+				}
+			}
+		}
 		layers.add(layer);
 
 		player = new Rectangle();
@@ -84,21 +99,11 @@ public class DungeonCrawler extends ApplicationAdapter {
 		position.y += (player.y - position.y) * lerp * Gdx.graphics.getDeltaTime();
 
 		mapRenderer.setView(camera);
+		mapRenderer.render();
 		camera.update();
 
 		batch.setProjectionMatrix(camera.combined);
 		batch.begin();
-
-		for (int y=0;y<16;y++){
-			for (int x=0;x<16;x++){
-				if(level.map[y][x]==1){
-					TiledMapTileLayer.Cell cell = new TiledMapTileLayer.Cell();
-
-					cell.setTile(new StaticTiledMapTile(region));
-					layer.setCell(x*64, y*64, cell);
-				}
-			}
-		}
 
 		batch.draw(playerSprite, player.x, player.y);
 		batch.draw(tile,object.x,object.y);
@@ -144,3 +149,22 @@ public class DungeonCrawler extends ApplicationAdapter {
 		else return false;
 	}
 }
+/*
+private boolean isCellBlocked(float x, float y) {
+	Cell cell = null;
+	boolean blocked = false;
+
+	try {
+		cell = collisionLayer.getCell((int) (x / collisionLayer.getTileWidth()), (int) (y / collisionLayer.getTileHeight()));
+	} catch (Exception e) {
+		e.printStackTrace();
+	}
+
+	if (cell != null && cell.getTile() != null) {
+		if (cell.getTile().getProperties().containsKey("blocked")) {
+			blocked = true;
+		}
+	}
+	return blocked;
+}
+*/
