@@ -35,7 +35,7 @@ public class DungeonCrawler extends ApplicationAdapter {
 	TiledMap tileMap;
 	MapLayers layers;
 	TiledMapTileLayer layer;
-	TiledMapTileLayer collisionLaayer;
+	TiledMapTileLayer collisionLayer;
 	TiledMapRenderer mapRenderer;
 
 	private OrthographicCamera camera;
