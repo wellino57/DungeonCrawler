@@ -24,14 +24,13 @@ import com.badlogic.gdx.math.Rectangle;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Timer;
 import java.util.Vector;
 
 public class DungeonCrawler extends ApplicationAdapter {
 	SpriteBatch batch;
-	Texture img;
-	Texture playerSprite;
-	Texture tile;
-	TextureRegion region;
+	Texture img, playerSprite, tile, colors, floor, wall;
+	TextureRegion region, path, blue, green, yellow, red, floorRegion, wallRegion;
 
 	private Rectangle player;
 	private Rectangle object;
@@ -54,7 +53,19 @@ public class DungeonCrawler extends ApplicationAdapter {
 		img = new Texture("badlogic.jpg");
 		playerSprite = new Texture(Gdx.files.internal("player.png"));
 		tile = new Texture(Gdx.files.internal("tiles.png"));
+		colors = new Texture(Gdx.files.internal("colors.png"));
+		floor = new Texture(Gdx.files.internal("floor.jpg"));
+		wall = new Texture(Gdx.files.internal("wall.jpg"));
+
 		region = new TextureRegion(tile, 0, 0, 64, 64);
+		path = new TextureRegion(playerSprite, 0, 0, 64, 64);
+		floorRegion = new TextureRegion(floor, 0, 0, 64, 64);
+		wallRegion = new TextureRegion(wall, 0, 0, 64, 64);
+
+		blue = new TextureRegion(colors, 0, 0, 64, 64);
+		green = new TextureRegion(colors, 64, 0, 64, 64);
+		yellow = new TextureRegion(colors, 128, 0, 64, 64);
+		red = new TextureRegion(colors, 196, 0, 64, 64);
 
 		camera = new OrthographicCamera();
 		camera.setToOrtho(false, 800, 480);
@@ -68,16 +79,8 @@ public class DungeonCrawler extends ApplicationAdapter {
 		collisionLayer = new TiledMapTileLayer(256, 256, 16, 16);
 		mapRenderer = new OrthogonalTiledMapRenderer(tileMap);
 
-		for (int y=0;y<16;y++){
-			for (int x=0;x<16;x++){
-				if(level.map[y][x]==1){
-					TiledMapTileLayer.Cell cell = new TiledMapTileLayer.Cell();
+		updateBoard();
 
-					cell.setTile(new StaticTiledMapTile(region));
-					layer.setCell(x*4, -y*4+60, cell);
-				}
-			}
-		}
 		layers.add(layer);
 
 		player = new Rectangle();
@@ -85,12 +88,6 @@ public class DungeonCrawler extends ApplicationAdapter {
 		player.y = 540 / 2;
 		player.width = 60;
 		player.height = 60;
-
-		object = new Rectangle();
-		object.x = 100;
-		object.y = 100;
-		object.width = 64;
-		object.height = 64;
 
 	}
 
@@ -113,7 +110,6 @@ public class DungeonCrawler extends ApplicationAdapter {
 		batch.begin();
 
 		batch.draw(playerSprite, player.x, player.y);
-		batch.draw(tile,object.x,object.y);
 
 		batch.end();
 
@@ -141,15 +137,17 @@ public class DungeonCrawler extends ApplicationAdapter {
 		if(Gdx.input.isKeyPressed(Input.Keys.D)) player.x += 200 * Gdx.graphics.getDeltaTime();
 		if(Gdx.input.isKeyPressed(Input.Keys.A)) player.x -= 200 * Gdx.graphics.getDeltaTime();
 
-		if(Gdx.input.isTouched()) {
+		if(Gdx.input.justTouched()) {
 			Vector3 touchPos = new Vector3();
 			touchPos.set(Gdx.input.getX(), Gdx.input.getY(), 0);
 			camera.unproject(touchPos);
-			System.out.println(touchPos.x/64+" "+touchPos.y/64);
+			System.out.println("Mouse : "+touchPos.x/64+" "+touchPos.y/64);
 			//player.x = touchPos.x - 64 / 2;
 			//player.y = touchPos.y - 64 / 2;
-			tracePath(findPath(touchPos.x, touchPos.y));
-			System.out.println(getNode(touchPos.x, touchPos.y).val);
+			System.out.println(getNode((int)touchPos.x/64, (int)touchPos.y/64).value);
+			System.out.println("Player : "+player.x/64+" "+player.y/64);
+			tracePath(pathfinder((int)Math.floor(player.x/64), (int)Math.floor(player.y/64), (int)Math.floor(touchPos.x/64), (int)Math.floor(touchPos.y/64)));
+			updateBoard();
 		}
 
 		checkCollision();
@@ -168,14 +166,14 @@ public class DungeonCrawler extends ApplicationAdapter {
 	private void checkCollision() {
 		boolean collisionDetected = false;
 
-		if (Intersector.overlaps(player, object)) {
-			collisionDetected = true;
-		}
+		//if (Intersector.overlaps(player, object)) {
+		//	collisionDetected = true;
+		//}
 
 		for (int y = 0; y < layer.getHeight(); y++) {
 			for (int x = 0; x < layer.getWidth(); x++) {
 				TiledMapTileLayer.Cell cell = layer.getCell(x, y);
-				if (cell != null) {
+				if (cell != null && cell.getTile().getTextureRegion() == wallRegion) {
 					Rectangle tileRect = new Rectangle(x * layer.getTileWidth(), y * layer.getTileHeight(), layer.getTileWidth()*4, layer.getTileHeight()*4);
 					if (Intersector.overlaps(player, tileRect)) {
 						collisionDetected = true;
@@ -196,82 +194,157 @@ public class DungeonCrawler extends ApplicationAdapter {
 		player.y = previousY;
 	}
 
-	public ArrayList<Node> findPath (double mx, double my){
-		ArrayList<Node> open = new ArrayList<>();
-		ArrayList<Node> closed = new ArrayList<>();
-
-		Node startTile = getNode(player.x, player.y);
-		startTile.g = 0;
-		startTile.h = pathLenght(startTile, getNode(mx, my));
-		startTile.f = startTile.g + startTile.h;
-		open.add(startTile);
-
-		getNode(mx, my).goal = true;
-
-		while(!open.isEmpty()){
-			Node current = open.get(0);
-			for(Node n : open){
-				if (n.f < current.f) current = n;
-			}
-
-			open.remove(current);
-			closed.add(current);
-
-			if (current.goal) return getPath(current);
-
-			int[][] dirs = new int[][]{{-1,0},{1,0},{0,-1},{0,1}};
-			ArrayList<Node> neighbours= new ArrayList<>();
-			for(int[] dir : dirs){
-				Node neighbour = getNode(current.x+dir[0], current.y+dir[1]);
-				if (!closed.contains(neighbour) && neighbour.val == 0){
-					neighbours.add(neighbour);
-
-					for(Node neigh : neighbours){
-						int possibleG = current.g + pathLenght(current, neigh);
-						if (possibleG < neigh.g){
-							neigh.precursor = current;
-							neigh.g = possibleG;
-							neigh.h = pathLenght(neigh, getNode(mx,my));
-							neigh.f = neigh.g + neigh.h;
-
-							if (!open.contains(neigh)){
-								open.add(neigh);
-							}
-						}
-					}
-				}
-			}
-		}
-		return null;
+	public Node getNode(int x, int y){
+		return level.nodeMap[x][y];
 	}
 
-	public int pathLenght(Node startNode, Node endNode){
-		return Math.abs(startNode.x - endNode.x) + Math.abs(startNode.y - endNode.y);
+	private int calculateDistance(Node node1, Node node2){
+		int xDistance = Math.abs(node1.x - node2.x);
+		int yDistance = Math.abs(node1.y - node2.y);
+		int remaining = xDistance + yDistance;
+		return remaining;
 	}
 
-	public Node getNode(double x, double y){
-		int mapX = (int)Math.floor(x/64);
-		int mapY = (int)Math.floor(y/64);
-		return Map.nodeMap[mapX][mapY];
-	}
-
-	public ArrayList<Node> getPath(Node n){
+	private ArrayList<Node> getPath(Node end){
 		ArrayList<Node> path = new ArrayList<>();
-		while(n.precursor != null){
-			path.add(n);
-			n = n.precursor;
+		path.add(end);
+		Node current = end;
+
+		while (current.cameFrom != null){
+			System.out.println("Sciezka: "+current.x+" "+current.y);
+			path.add(current.cameFrom);
+			current.value = 3;
+			current = current.cameFrom;
 		}
 		Collections.reverse(path);
 		return path;
 	}
 
-	public void tracePath(ArrayList<Node> path){
+	private void tracePath(ArrayList<Node> path) {
 		if (path != null){
-			for(Node n : path){
-				player.x = n.x;
-				player.y = n.y;
+			Timer timer = new Timer();
+
+			for (Node n : path){
+
+				player.x = n.x*64;
+				player.y = (15-n.y)*64;
 			}
 		}
 	}
 
+	public ArrayList<Node> pathfinder( int playerX, int playerY, int mouseX, int mouseY){
+		ArrayList<Node> open = new ArrayList<>();
+		ArrayList<Node> closed = new ArrayList<>();
+
+		// Reset g, h, and f values for all nodes
+		for (int row = 0; row < 16; row++) {
+			for (int col = 0; col < 16; col++) {
+				level.nodeMap[col][row].g = Integer.MAX_VALUE;
+				level.nodeMap[col][row].h = 0;
+				level.nodeMap[col][row].f = 0;
+				level.nodeMap[col][row].cameFrom = null;
+				level.nodeMap[col][row].inOpen = false;
+				level.nodeMap[col][row].inClosed = false;
+				level.nodeMap[col][row].start = false;
+				level.nodeMap[col][row].end = false;
+				if (level.nodeMap[col][row].value == 3) level.nodeMap[col][row].value = 0;
+			}
+		}
+
+		// Create the start node and assign g, h, and f value
+		Node startNode = getNode(playerX, playerY);
+		startNode.start = true;
+		startNode.g = 0;
+		startNode.h = calculateDistance(startNode, getNode(mouseX, mouseY));
+		startNode.f = startNode.g + startNode.h;
+		startNode.value = 3;
+
+		getNode(mouseX, mouseY).end = true;
+
+		// Append start node to the open list
+		open.add(startNode);
+
+		while (!open.isEmpty()){
+			// Get node with the lowest f score in the open list
+			Node current = open.get(0);
+			for (int i = 1; i < open.size(); i++){
+				Node node = open.get(i);
+				if (node.f < current.f){
+					current = node;
+				}
+			}
+
+			// Remove current from open list
+			open.remove(current);
+
+			// Add current to closed
+			closed.add(current);
+
+			// Check if current is the end node
+			if (current.end){
+				return getPath(current);
+			}
+
+			// Get neighbours list of the current node
+			ArrayList<Node> neighbours = getNeighbours( current, closed);
+
+			// For each neighbour of the current node
+			for (Node neighbour : neighbours){
+				int tentativeG = current.g + calculateDistance(current, neighbour);
+				if (tentativeG < neighbour.g){
+					neighbour.cameFrom = current;
+					neighbour.g = tentativeG;
+					neighbour.h = calculateDistance(neighbour, getNode(mouseX, mouseY));
+					neighbour.f = neighbour.g + neighbour.h;
+
+					if (!open.contains(neighbour)){
+						open.add(neighbour);
+					}
+				}
+			}
+		}
+
+		return null; // No path found
+	}
+
+	private ArrayList<Node> getNeighbours(Node node, ArrayList<Node> closed){
+		ArrayList<Node> neighbours = new ArrayList<>();
+
+		int[][] directions = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}}; // Only orthogonal moves
+
+		for (int[] dir : directions){
+			int col = node.x + dir[0];
+			int row = 15 - node.y + dir[1];
+			if ((0 <= col && col < 16) && (0 <= row && row < 16)){
+				Node neighbour = getNode(col, row);
+				if (!closed.contains(neighbour) && neighbour.value == 0){
+					neighbours.add(neighbour);
+				}
+			}
+		}
+
+		return neighbours;
+	}
+
+	private void updateBoard(){
+		for (int y=0;y<16;y++){
+			for (int x=0;x<16;x++){
+				TiledMapTileLayer.Cell cell = new TiledMapTileLayer.Cell();
+
+				switch (level.nodeMap[x][15-y].value){
+					case 0:
+						cell.setTile(new StaticTiledMapTile(floorRegion));
+						break;
+					case 1:
+						cell.setTile(new StaticTiledMapTile(wallRegion));
+						break;
+					case 3:
+						cell.setTile(new StaticTiledMapTile(blue));
+						break;
+				}
+
+				layer.setCell(x*4, -y*4+60, cell);
+			}
+		}
+	}
 }
