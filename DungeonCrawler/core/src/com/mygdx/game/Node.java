@@ -9,8 +9,6 @@ public class Node {
     int f;
     Boolean start = false;
     Boolean end = false;
-    Boolean inOpen = false;
-    Boolean inClosed = false;
 
     Node cameFrom = null;
 

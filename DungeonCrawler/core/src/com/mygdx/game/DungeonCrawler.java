@@ -33,7 +33,6 @@ public class DungeonCrawler extends ApplicationAdapter {
 	TextureRegion region, path, blue, green, yellow, red, floorRegion, wallRegion;
 
 	private Rectangle player;
-	private Rectangle object;
 
 	Map level;
 	TiledMap tileMap;
@@ -86,8 +85,8 @@ public class DungeonCrawler extends ApplicationAdapter {
 		player = new Rectangle();
 		player.x = 960 / 2;
 		player.y = 540 / 2;
-		player.width = 60;
-		player.height = 60;
+		player.width = 40;
+		player.height = 40;
 
 	}
 
@@ -243,8 +242,6 @@ public class DungeonCrawler extends ApplicationAdapter {
 				level.nodeMap[col][row].h = 0;
 				level.nodeMap[col][row].f = 0;
 				level.nodeMap[col][row].cameFrom = null;
-				level.nodeMap[col][row].inOpen = false;
-				level.nodeMap[col][row].inClosed = false;
 				level.nodeMap[col][row].start = false;
 				level.nodeMap[col][row].end = false;
 				if (level.nodeMap[col][row].value == 3) level.nodeMap[col][row].value = 0;
